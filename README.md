@@ -47,14 +47,15 @@ A Raspberry Pi 4 desk display showing aircraft currently flying overhead near Po
 - Background thread refreshes data on the interval; errors surface as a card-area message without crashing
 
 ### `flights.service` — systemd unit
-- Runs as the `pi` user under the existing X session (`DISPLAY=:0`)
+- A template (`__USER__` / `__INSTALL_DIR__` / `__HOME__` placeholders) — `install.sh` fills in whichever user and path it's run as and installs the result, so it works regardless of your account name
+- Runs under the existing X session (`DISPLAY=:0`)
 - 8-second startup delay to let the desktop session come up before Pygame tries to open a window
 - `Restart=always` — recovers from crashes or network failures automatically
 
 ### `install.sh` — Pi installer
 - Installs system packages (`python3-pygame` from apt to avoid a source build, `fonts-dejavu-core`)
 - Creates a virtualenv with `--system-site-packages` so it picks up the apt pygame
-- Installs Python deps (`requests`)
+- Installs Python deps from `requirements.txt`
 - Runs a 5-second smoke test in SIMULATE mode
 - Installs and enables the systemd service
 
@@ -82,7 +83,7 @@ Press `Q` or `Escape` to quit. `↑` / `↓` scroll through more than 5 flights.
 ## Pi deploy
 
 ```bash
-# On the Pi (as the pi user):
+# On the Pi, as whichever user should run the display:
 git clone <this-repo> ~/flights-overhead
 cd ~/flights-overhead
 bash install.sh
@@ -95,7 +96,7 @@ journalctl -u flights-overhead -f
 sudo systemctl restart flights-overhead
 ```
 
-To test the display without network on the Pi itself, add `Environment=SIMULATE=true` to `/etc/systemd/system/flights.service` and `sudo systemctl restart flights-overhead`.
+To test the display without network on the Pi itself, add `Environment=SIMULATE=true` to `/etc/systemd/system/flights-overhead.service` and `sudo systemctl restart flights-overhead`.
 
 ---
 

@@ -1,3 +1,5 @@
+# Template — install.sh substitutes the placeholders below and writes the
+# result to /etc/systemd/system/. Don't copy this file directly.
 [Unit]
 Description=Flights Overhead Display
 Documentation=https://github.com/openskynetwork/opensky-api
@@ -6,17 +8,17 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/flights-overhead
+User=__USER__
+WorkingDirectory=__INSTALL_DIR__
 
-# X display (official Pi 7" display uses :0 under the pi user's Wayland/X session)
+# X display (uses the login user's Wayland/X session — see __USER__ above)
 Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/pi/.Xauthority
+Environment=XAUTHORITY=__HOME__/.Xauthority
 
 # Uncomment to use fake data (useful for testing the display on the Pi itself)
 # Environment=SIMULATE=true
 
-ExecStart=/home/pi/flights-overhead/venv/bin/python main.py --fullscreen --interval 45
+ExecStart=__INSTALL_DIR__/venv/bin/python main.py --fullscreen --interval 45
 Restart=always
 RestartSec=15
 # Allow time for the desktop session to start on boot
