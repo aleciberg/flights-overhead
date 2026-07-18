@@ -1,0 +1,26 @@
+[Unit]
+Description=Flights Overhead Display
+Documentation=https://github.com/openskynetwork/opensky-api
+After=network-online.target graphical-session.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/flights-overhead
+
+# X display (official Pi 7" display uses :0 under the pi user's Wayland/X session)
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/pi/.Xauthority
+
+# Uncomment to use fake data (useful for testing the display on the Pi itself)
+# Environment=SIMULATE=true
+
+ExecStart=/home/pi/flights-overhead/venv/bin/python main.py --fullscreen --interval 45
+Restart=always
+RestartSec=15
+# Allow time for the desktop session to start on boot
+ExecStartPre=/bin/sleep 8
+
+[Install]
+WantedBy=graphical-session.target
