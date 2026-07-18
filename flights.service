@@ -3,7 +3,7 @@
 [Unit]
 Description=Flights Overhead Display
 Documentation=https://github.com/openskynetwork/opensky-api
-After=network-online.target graphical-session.target
+After=network-online.target graphical.target
 Wants=network-online.target
 
 [Service]
@@ -25,4 +25,4 @@ RestartSec=15
 ExecStartPre=/bin/sleep 8
 
 [Install]
-WantedBy=graphical-session.target
+WantedBy=graphical.target
