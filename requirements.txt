@@ -1,2 +1,9 @@
 pygame>=2.5.0
 requests>=2.31.0
+
+# Unofficial FR24 client for live route lookups (see enrichment.py). Scrapes
+# FlightRadar24's own live-map endpoints — not an official/supported API,
+# can break or get rate-limited without notice. beautifulsoup4 is an
+# undeclared runtime dependency of FlightRadarAPI (import fails without it).
+FlightRadarAPI>=1.4.0
+beautifulsoup4>=4.12

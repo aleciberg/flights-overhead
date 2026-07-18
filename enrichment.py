@@ -1,24 +1,33 @@
 """
 Enrichment lookups: flight routes, aircraft type, airline name.
 
-Routes:        OpenSky /api/routes?callsign= — historical callsign->route
-                                                lookup, not a per-flight estimate
-                                                (see get_flight_route docstring)
+Routes:        FlightRadar24 (unofficial, live) — see get_fr24_routes docstring.
+               Falls back to OpenSky /api/routes?callsign= — historical
+               callsign->route lookup, not a per-flight estimate (see
+               get_flight_route docstring) — when FR24 has no data for a flight.
 Aircraft type: HexDB /api/v1/aircraft        — no auth, ~30-40% coverage
 Airline name:  local ICAO prefix map  — instant, ~70% of commercial flights
 
-All results are cached in-process so each callsign/icao24 is only fetched once.
+All results are cached in-process so each callsign/icao24 is only fetched once
+(FR24 routes are the exception — re-fetched every cycle, see below).
 """
 
 import re
 import time
 import logging
 import requests
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import opensky_auth
 
+try:
+    from FlightRadar24 import FlightRadar24API
+except ImportError:
+    FlightRadar24API = None
+
 logger = logging.getLogger(__name__)
+
+_fr24 = FlightRadar24API() if FlightRadar24API else None
 
 _OPENSKY   = "https://opensky-network.org/api"
 _HEXDB     = "https://hexdb.io/api/v1"
@@ -158,6 +167,19 @@ def airport_name(icao: str) -> str:
     return AIRPORTS.get(icao.upper(), icao.upper())
 
 
+def _airport_name_iata(iata: str) -> str:
+    """AIRPORTS is keyed by ICAO; FR24 gives IATA. K-/C-prefix covers most
+    CONUS + Canada airports already in the dict. Anywhere else (Alaska,
+    Hawaii, international) just falls back to the bare 3-letter IATA code,
+    which is itself a perfectly recognizable airport label."""
+    iata = iata.upper()
+    for prefix in ("K", "C"):
+        name = AIRPORTS.get(f"{prefix}{iata}")
+        if name:
+            return name
+    return iata
+
+
 # ---------------------------------------------------------------------------
 # Airline ICAO prefix -> name  (local lookup, no network)
 # ---------------------------------------------------------------------------
@@ -232,6 +254,61 @@ def get_airline(callsign: str) -> Optional[str]:
     """Return airline name from ICAO callsign prefix, or None for GA/unknown."""
     m = _AIRLINE_RE.match(callsign.upper())
     return _AIRLINES.get(m.group(1)) if m else None
+
+
+# ---------------------------------------------------------------------------
+# Route lookup via FlightRadar24 (unofficial) — one bounded query per fetch
+# cycle, covering every flight currently in the box.
+#
+# Unlike the historical callsign->route lookups below, this comes back in
+# the SAME response as the live flight list itself (FR24's live-map data
+# includes origin/destination per aircraft), so it reflects what that
+# specific aircraft is actually doing right now rather than a guess based on
+# flight-number history. No per-flight round trip, no stale/reused-flight-
+# number mismatches.
+#
+# Caveat: this is FlightRadar24's own internal live-map endpoint, reverse
+# engineered by a third-party library (github.com/JeanExtreme002/FlightRadarAPI)
+# — not an officially supported API. It can go quiet per-session: known issue
+# (github.com/AlexandrErohin/home-assistant-flightradar24/issues/278) where a
+# given client session starts getting HTTP 200 responses with an empty flight
+# list (likely Cloudflare bot mitigation), while `full_count` in the raw
+# response still shows real global traffic — i.e. it's the session that's
+# bad, not "no planes nearby". A fresh session often isn't affected, so on an
+# empty result we throw the client away and retry once with a new one before
+# giving up and falling through to the callsign-based lookups below.
+# ---------------------------------------------------------------------------
+
+def get_fr24_routes(bbox: dict) -> Dict[str, Tuple[str, Optional[str]]]:
+    """One bounded live-flight query -> {callsign: (dep_name, arr_name_or_None)}."""
+    global _fr24
+    if _fr24 is None:
+        return {}
+
+    bounds = f"{bbox['lamax']},{bbox['lamin']},{bbox['lomin']},{bbox['lomax']}"
+    flights = []
+    for attempt in (1, 2):
+        try:
+            flights = _fr24.get_flights(bounds=bounds)
+        except Exception as exc:
+            logger.warning("FR24 bounded query failed (attempt %d): %s", attempt, exc)
+            flights = []
+        if flights:
+            break
+        if attempt == 1:
+            logger.info("FR24 bounded query: empty result, retrying with a fresh session")
+            _fr24 = FlightRadar24API()
+
+    routes: Dict[str, Tuple[str, Optional[str]]] = {}
+    for f in flights:
+        if not f.callsign or not f.origin_airport_iata:
+            continue
+        dep = _airport_name_iata(f.origin_airport_iata)
+        arr = _airport_name_iata(f.destination_airport_iata) if f.destination_airport_iata else None
+        routes[f.callsign] = (dep, arr)
+
+    logger.info("FR24 bounded query: %d/%d flights with route data", len(routes), len(flights))
+    return routes
 
 
 # ---------------------------------------------------------------------------

@@ -92,10 +92,10 @@ def _parse_state(state: list) -> Optional[Flight]:
     )
 
 
-def _enrich(flight: Flight) -> None:
+def _enrich(flight: Flight, fr24_routes: dict) -> None:
     flight.airline       = enrichment.get_airline(flight.callsign)
     flight.aircraft_type = enrichment.get_aircraft_type(flight.icao24)
-    flight.route         = enrichment.get_flight_route(flight.callsign)
+    flight.route         = fr24_routes.get(flight.callsign) or enrichment.get_flight_route(flight.callsign)
 
 
 def fetch_flights() -> List[Flight]:
@@ -114,11 +114,16 @@ def fetch_flights() -> List[Flight]:
         flights = _filter_commercial(flights)
     flights.sort(key=lambda f: f.distance_mi)
 
+    # One bounded FR24 query covers routes for every flight in the box (see
+    # enrichment.get_fr24_routes); only flights it misses fall through to the
+    # slower per-callsign lookups inside _enrich.
+    fr24_routes = enrichment.get_fr24_routes(BBOX)
+
     # Enrich closest flights only — sequential with a pause to respect rate limits.
-    # Each icao24 is only fetched once per ROUTE_TTL (30 min), so steady-state
-    # load is very low even with many flights in the area.
+    # Each icao24/callsign is only re-fetched once its cache TTL expires, so
+    # steady-state load is very low even with many flights in the area.
     for flight in flights[:ENRICH_LIMIT]:
-        _enrich(flight)
+        _enrich(flight, fr24_routes)
         time.sleep(1)
 
     return flights
