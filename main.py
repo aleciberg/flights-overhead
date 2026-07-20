@@ -15,6 +15,7 @@ import argparse
 import threading
 import time
 import logging
+import logging.handlers
 
 # Parse args before importing fetcher — SIMULATE is read at import time.
 _parser = argparse.ArgumentParser(description="Flights Overhead display")
@@ -31,10 +32,25 @@ if _args.simulate:
 
 # LOG_LEVEL=DEBUG shows per-card route rendering; INFO (default) shows route
 # lookup outcomes (HTTP status, empty records, etc.) without the per-frame noise.
+#
+# Logs also go to logs/flights.log on disk, not just stdout/journal — Pi
+# images typically run journald with volatile (tmpfs) storage, so
+# journalctl history is wiped on every reboot and won't survive long enough
+# to catch an intermittent crash.
+_LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.handlers.RotatingFileHandler(
+            os.path.join(_LOG_DIR, "flights.log"),
+            maxBytes=1_000_000, backupCount=3,
+        ),
+    ],
 )
+logger = logging.getLogger(__name__)
 
 # Load .env before any project imports — enrichment.py captures creds at import time.
 def _load_dotenv(path: str = ".env") -> None:
@@ -66,6 +82,7 @@ def _fetch_loop(display: FlightDisplay, interval: int, stop: threading.Event) ->
             flights = fetch_flights()
             display.update(flights)
         except Exception as exc:
+            logger.exception("fetch loop: refresh failed")
             display.update([], error=str(exc))
 
 
@@ -76,6 +93,7 @@ def main() -> None:
     try:
         display.update(fetch_flights())
     except Exception as exc:
+        logger.exception("initial fetch failed")
         display.update([], error=str(exc))
 
     stop = threading.Event()
@@ -88,13 +106,20 @@ def main() -> None:
 
     clock   = pygame.time.Clock()
     running = True
-    while running:
-        running = display.handle_events()
-        display.draw()
-        clock.tick(10)   # 10 fps is plenty
+    try:
+        while running:
+            running = display.handle_events()
+            display.draw()
+            clock.tick(10)   # 10 fps is plenty
+    except Exception:
+        # Log the full traceback before we die so systemd's restart isn't
+        # the only trace this crash leaves behind.
+        logger.exception("main loop crashed — exiting so systemd can restart it")
+        raise
+    finally:
+        stop.set()
+        pygame.quit()
 
-    stop.set()
-    pygame.quit()
     sys.exit(0)
 
 

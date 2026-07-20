@@ -13,23 +13,23 @@ from fetcher import Flight, SIMULATE
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Colors
+# Colors — "Amber Terminal": retro monochrome CRT / radar-scope palette
 # ---------------------------------------------------------------------------
-BG = (13,  13,  20)
-CARD_EVEN = (22,  22,  46)
-CARD_ODD = (18,  18,  38)
-HEADER_BG = (10,  10,  28)
-DIVIDER = (35,  35,  60)
+BG = (10,   8,   6)
+CARD_EVEN = (26,  20,  12)
+CARD_ODD = (20,  15,   9)
+HEADER_BG = (8,   6,   4)
+DIVIDER = (54,  40,  20)
 
-ACCENT = (0,   212, 255)   # cyan  — callsigns
-TEXT = (220, 220, 220)   # white-ish
-DIM = (110, 110, 140)   # muted
-GOLD = (255, 210,  70)   # altitude
-GREEN = (0,   230, 120)   # speed / climbing
-RED_VR = (255,  85,  85)   # descending
-CORAL = (255, 120,  90)   # distance
-AMBER = (255, 185,  30)   # simulate badge
-ROUTE = (180, 210, 255)   # origin -> destination
+ACCENT = (255, 176,   0)   # amber — callsigns
+TEXT = (230, 214, 180)   # warm white-ish
+DIM = (140, 110,  70)   # muted amber-brown
+GOLD = (255, 200,  80)   # altitude
+GREEN = (140, 255, 120)   # speed / climbing
+RED_VR = (255,  90,  70)   # descending
+CORAL = (255, 140,  90)   # distance
+AMBER = (255, 150,  40)   # simulate badge
+ROUTE = (255, 220, 150)   # origin -> destination
 
 # ---------------------------------------------------------------------------
 # Layout constants (pixels, 800×480 target)
